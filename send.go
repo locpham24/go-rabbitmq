@@ -20,39 +20,27 @@ func main() {
 	failOnError(err, "Failed to open a channel")
 	defer ch.Close()
 
+	exchangeName := "agreements"
+	routingKey := "agreements.eu.berlin"
 	// declare a direct exchange
 	err = ch.ExchangeDeclare(
-		"pdf",   // name
-		"direct", // type
-		true,     // durable
-		false,    // auto-deleted
-		false,    // internal
-		false,    // no-wait
-		nil,      // arguments
+		exchangeName, // name
+		"topic",      // type
+		true,         // durable
+		false,        // auto-deleted
+		false,        // internal
+		false,        // no-wait
+		nil,          // arguments
 	)
 	failOnError(err, "Failed to declare an exchange")
 
 	// this message needs to be published to pdf_log_queue
-	body := "Hello Log Queue!"
+	body := "My routing key is " + routingKey
 	err = ch.Publish(
-		"pdf",   // exchange name
-		"pdf_log",    // routing key
-		false,  // mandatory
-		false,  // immediate
-		amqp.Publishing{
-			ContentType: "text/plain",
-			Body:        []byte(body),
-		})
-	failOnError(err, "Failed to publish a message")
-	log.Printf(" [x] Sent %s", body)
-
-	// this message needs to be published to create_pdf_queue
-	body = "Hello Create PDF Queue!"
-	err = ch.Publish(
-		"pdf",     // exchange
-		"pdf_create",   // routing key
-		false,  // mandatory
-		false,  // immediate
+		exchangeName, // exchange name
+		routingKey,   // routing key
+		false,        // mandatory
+		false,        // immediate
 		amqp.Publishing{
 			ContentType: "text/plain",
 			Body:        []byte(body),

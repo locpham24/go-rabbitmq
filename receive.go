@@ -12,6 +12,48 @@ func failOnError(err error, msg string) {
 	}
 }
 
+func createQueue(ch *amqp.Channel, exchangeName string, queueName string, routingKey string) amqp.Queue {
+	logQueue, err := ch.QueueDeclare(
+		queueName, // name
+		false,     // durable
+		false,     // delete when unused
+		true,      // exclusive
+		false,     // no-wait
+		nil,       // arguments
+	)
+	failOnError(err, "Failed to declare a queue")
+
+	// Declare binding key
+	err = ch.QueueBind(
+		logQueue.Name, // queue name
+		routingKey,    // routing key
+		exchangeName,  // exchange
+		false,
+		nil,
+	)
+	failOnError(err, "Failed to bind a queue")
+
+	return logQueue
+}
+
+func createConsumer(ch *amqp.Channel, queue amqp.Queue) {
+	msgs, err := ch.Consume(
+		queue.Name, // queue
+		"",         // consumer
+		true,       // auto-ack
+		false,      // exclusive
+		false,      // no-local
+		false,      // no-wait
+		nil,        // args
+	)
+	failOnError(err, "Failed to register a consumer")
+	go func() {
+		for d := range msgs {
+			log.Printf(" [x] From %s: %s", queue.Name, d.Body)
+		}
+	}()
+}
+
 func main() {
 	conn, err := amqp.Dial("amqp://guest:guest@localhost:5672/")
 	failOnError(err, "Failed to connect to RabbitMQ")
@@ -21,94 +63,28 @@ func main() {
 	failOnError(err, "Failed to open a channel")
 	defer ch.Close()
 
+	exchangeName := "agreements"
 	// Declare the exchange that we want to get message from
 	err = ch.ExchangeDeclare(
-		"pdf",   // name
-		"direct", // type
-		true,     // durable
-		false,    // auto-deleted
-		false,    // internal
-		false,    // no-wait
-		nil,      // arguments
+		exchangeName, // name
+		"topic",      // type
+		true,         // durable
+		false,        // auto-deleted
+		false,        // internal
+		false,        // no-wait
+		nil,          // arguments
 	)
 	failOnError(err, "Failed to declare an exchange")
 
-	// Declare the queue to receive message about logging
-	logQueue, err := ch.QueueDeclare(
-		"pdf_log_queue",    // name
-		false, // durable
-		false, // delete when unused
-		true,  // exclusive
-		false, // no-wait
-		nil,   // arguments
-	)
-	failOnError(err, "Failed to declare a queue")
-
-	// Declare the queue to receive message about creating pdf
-	createQueue, err := ch.QueueDeclare(
-		"create_pdf_queue",    // name
-		false, // durable
-		false, // delete when unused
-		true,  // exclusive
-		false, // no-wait
-		nil,   // arguments
-	)
-	failOnError(err, "Failed to declare a queue")
-
-	// Declare binding about logging
-	err = ch.QueueBind(
-		logQueue.Name, // queue name
-		"pdf_log",  // routing key
-		"pdf", // exchange
-		false,
-		nil,
-	)
-	failOnError(err, "Failed to bind a queue")
-
-	// Declare binding about creating log
-	err = ch.QueueBind(
-		createQueue.Name, // queue name
-		"pdf_create",  // routing key
-		"pdf", // exchange
-		false,
-		nil,
-	)
-	failOnError(err, "Failed to bind a queue")
-
-	msgsFromLog, err := ch.Consume(
-		logQueue.Name, // queue
-		"",     // consumer
-		true,   // auto-ack
-		false,  // exclusive
-		false,  // no-local
-		false,  // no-wait
-		nil,    // args
-	)
-
-	msgsFromCreate, err := ch.Consume(
-		createQueue.Name, // queue
-		"",     // consumer
-		true,   // auto-ack
-		false,  // exclusive
-		false,  // no-local
-		false,  // no-wait
-		nil,    // args
-	)
-	failOnError(err, "Failed to register a consumer")
+	berlinQueue := createQueue(ch, exchangeName, "berlin_agreements", "agreements.eu.berlin.#")
+	allQueue := createQueue(ch, exchangeName, "all_agreements", "agreements.#")
+	headstoreQueue := createQueue(ch, exchangeName, "headstore_agreements", "agreements.eu.*.headstore")
 
 	forever := make(chan bool)
 
-	go func() {
-		for d := range msgsFromLog {
-			log.Printf(" [x] %s from log", d.Body)
-		}
-	}()
-
-	go func() {
-		for d := range msgsFromCreate {
-			log.Printf(" [x] %s from create", d.Body)
-		}
-	}()
+	createConsumer(ch, berlinQueue)
+	createConsumer(ch, allQueue)
+	createConsumer(ch, headstoreQueue)
 
 	log.Printf(" [*] Waiting for logs. To exit press CTRL+C")
 	<-forever
