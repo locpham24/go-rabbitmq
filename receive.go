@@ -12,7 +12,7 @@ func failOnError(err error, msg string) {
 	}
 }
 
-func createQueue(ch *amqp.Channel, exchangeName string, queueName string, routingPattern string) amqp.Queue {
+func createQueue(ch *amqp.Channel, exchangeName string, queueName string, args map[string]interface{}) amqp.Queue {
 	logQueue, err := ch.QueueDeclare(
 		queueName, // name
 		false,     // durable
@@ -25,11 +25,11 @@ func createQueue(ch *amqp.Channel, exchangeName string, queueName string, routin
 
 	// Declare binding key
 	err = ch.QueueBind(
-		logQueue.Name,  // queue name
-		routingPattern, // routing key
-		exchangeName,   // exchange
+		logQueue.Name, // queue name
+		"",            // routing key
+		exchangeName,  // exchange
 		false,
-		nil,
+		args,
 	)
 	failOnError(err, "Failed to bind a queue")
 
@@ -63,28 +63,50 @@ func main() {
 	failOnError(err, "Failed to open a channel")
 	defer ch.Close()
 
-	exchangeName := "sport_news"
+	exchangeName := "headers_example"
 	// Declare the exchange that we want to get message from
 	err = ch.ExchangeDeclare(
 		exchangeName, // name
-		"fanout",     // type
+		"headers",    // type
 		true,         // durable
 		false,        // auto-deleted
 		false,        // internal
 		false,        // no-wait
-		nil,          // arguments
+		map[string]interface{}{
+			"format":  "pdf",
+			"type":    "report",
+			"x-match": "all",
+		}, // arguments
 	)
 	failOnError(err, "Failed to declare an exchange")
 
-	berlinQueue := createQueue(ch, exchangeName, "berlin_agreements", "agreements.eu.berlin.#")
-	allQueue := createQueue(ch, exchangeName, "all_agreements", "agreements.#")
-	headstoreQueue := createQueue(ch, exchangeName, "headstore_agreements", "agreements.eu.*.headstore")
+	arg1 := map[string]interface{}{
+		"format":  "pdf",
+		"type":    "report",
+		"x-match": "all",
+	}
+
+	arg2 := map[string]interface{}{
+		"format":  "pdf",
+		"type":    "log",
+		"x-match": "any",
+	}
+
+	arg3 := map[string]interface{}{
+		"format":  "zip",
+		"type":    "report",
+		"x-match": "all",
+	}
+
+	queueA := createQueue(ch, exchangeName, "queue_a", arg1)
+	queueB := createQueue(ch, exchangeName, "queue_b", arg2)
+	queueC := createQueue(ch, exchangeName, "queue_c", arg3)
 
 	forever := make(chan bool)
 
-	createConsumer(ch, berlinQueue)
-	createConsumer(ch, allQueue)
-	createConsumer(ch, headstoreQueue)
+	createConsumer(ch, queueA)
+	createConsumer(ch, queueB)
+	createConsumer(ch, queueC)
 
 	log.Printf(" [*] Waiting for logs. To exit press CTRL+C")
 	<-forever
