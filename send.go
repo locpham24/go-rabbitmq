@@ -20,12 +20,12 @@ func main() {
 	failOnError(err, "Failed to open a channel")
 	defer ch.Close()
 
-	exchangeName := "agreements"
+	exchangeName := "sport_news"
 	routingKey := "agreements.eu.berlin"
 	// declare a direct exchange
 	err = ch.ExchangeDeclare(
 		exchangeName, // name
-		"topic",      // type
+		"fanout",     // type
 		true,         // durable
 		false,        // auto-deleted
 		false,        // internal

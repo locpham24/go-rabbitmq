@@ -12,7 +12,7 @@ func failOnError(err error, msg string) {
 	}
 }
 
-func createQueue(ch *amqp.Channel, exchangeName string, queueName string, routingKey string) amqp.Queue {
+func createQueue(ch *amqp.Channel, exchangeName string, queueName string, routingPattern string) amqp.Queue {
 	logQueue, err := ch.QueueDeclare(
 		queueName, // name
 		false,     // durable
@@ -25,9 +25,9 @@ func createQueue(ch *amqp.Channel, exchangeName string, queueName string, routin
 
 	// Declare binding key
 	err = ch.QueueBind(
-		logQueue.Name, // queue name
-		routingKey,    // routing key
-		exchangeName,  // exchange
+		logQueue.Name,  // queue name
+		routingPattern, // routing key
+		exchangeName,   // exchange
 		false,
 		nil,
 	)
@@ -63,11 +63,11 @@ func main() {
 	failOnError(err, "Failed to open a channel")
 	defer ch.Close()
 
-	exchangeName := "agreements"
+	exchangeName := "sport_news"
 	// Declare the exchange that we want to get message from
 	err = ch.ExchangeDeclare(
 		exchangeName, // name
-		"topic",      // type
+		"fanout",     // type
 		true,         // durable
 		false,        // auto-deleted
 		false,        // internal
